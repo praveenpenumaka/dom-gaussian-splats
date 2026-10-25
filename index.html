@@ -1,0 +1,1814 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gaussian Splat Renderer Experiment</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #090b10;
+        color: #f4f7fb;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-width: 720px;
+        height: 100vh;
+        height: 100dvh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: radial-gradient(circle at 50% 0%, #182033 0, transparent 38rem), #090b10;
+      }
+
+      main {
+        width: calc(100% - 48px);
+        height: 100%;
+        min-height: 0;
+        padding: 12px 0;
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+        gap: 8px;
+      }
+
+      header {
+        min-width: 0;
+        margin: 0;
+      }
+
+      h1 {
+        margin: 0 0 3px;
+        font-size: clamp(1.25rem, 2vw, 1.7rem);
+        letter-spacing: -0.04em;
+      }
+
+      p {
+        margin: 0;
+        color: #929caf;
+        font-size: 0.8rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #status {
+        display: block;
+        max-width: 100%;
+        margin-top: 3px;
+        color: #667085;
+        font-size: 0.7rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #credit {
+        display: block;
+        margin-top: 2px;
+        color: #667085;
+        font-size: 0.66rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #credit a { color: #8994a8; }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        align-items: end;
+        margin: 0;
+        padding: 8px 12px;
+        border: 1px solid #252b38;
+        border-radius: 12px;
+        background: rgba(13, 17, 25, 0.82);
+      }
+
+      .control {
+        display: grid;
+        gap: 4px;
+        color: #aeb7c7;
+        font-size: 0.75rem;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .model-control { min-width: 220px; }
+      .count-control { flex: 1; min-width: 280px; }
+
+      .renderer-select-control { min-width: 180px; }
+      .compute-select-control { min-width: 180px; }
+
+      select,
+      input[type="range"] {
+        width: 100%;
+        accent-color: #8aa4ff;
+      }
+
+      select {
+        min-height: 32px;
+        padding: 0 10px;
+        border: 1px solid #343b4b;
+        border-radius: 8px;
+        color: #eef2f8;
+        background: #121722;
+      }
+
+      .count-heading {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      #gaussian-count-output {
+        color: #eef2f8;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .renderer-grid {
+        display: grid;
+        width: 100%;
+        min-height: 0;
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .renderer-section {
+        min-width: 0;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+
+      .renderer-section h2 {
+        margin: 0 0 4px;
+        color: #c8d0dd;
+        font-size: 0.78rem;
+        font-weight: 650;
+        letter-spacing: 0.12em;
+        line-height: 16px;
+        text-transform: uppercase;
+      }
+
+      .viewport {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        aspect-ratio: 1;
+        overflow: hidden;
+        border: 1px solid #252b38;
+        border-radius: 16px;
+        background: #000;
+        box-shadow: 0 22px 70px rgba(0, 0, 0, 0.32);
+      }
+
+      .viewport-slot {
+        min-width: 0;
+        min-height: 0;
+        display: grid;
+        container-type: size;
+        place-items: center;
+      }
+
+      .viewport-shell {
+        position: relative;
+        max-width: 100%;
+        max-height: 100%;
+        width: min(100cqi, 100cqb);
+        height: min(100cqi, 100cqb);
+        aspect-ratio: 1;
+        place-self: center;
+      }
+
+      .render-loader {
+        position: absolute;
+        z-index: 20001;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 12px;
+        border-radius: 16px;
+        color: #dbe3f0;
+        background: rgba(4, 7, 12, 0.78);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 120ms ease, visibility 120ms ease;
+      }
+
+      .viewport-shell.is-loading .render-loader {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .axis-gizmo {
+        position: absolute;
+        z-index: 19;
+        left: 12px;
+        bottom: 12px;
+        width: 76px;
+        height: 76px;
+        border: 1px solid rgba(145, 158, 181, 0.22);
+        border-radius: 50%;
+        background: rgba(4, 7, 12, 0.78);
+        pointer-events: none;
+      }
+
+      .axis-gizmo .axis-origin {
+        fill: #dbe3f0;
+        opacity: 0.8;
+      }
+
+      .axis-gizmo [data-world-axis="x"] { color: #ff5b62; }
+      .axis-gizmo [data-world-axis="y"] { color: #55d67a; }
+      .axis-gizmo [data-world-axis="z"] { color: #5c91ff; }
+
+      .axis-gizmo line {
+        stroke: currentColor;
+        stroke-width: 2.5;
+        stroke-linecap: round;
+      }
+
+      .axis-gizmo .axis-endpoint { fill: currentColor; }
+
+      .axis-gizmo text {
+        fill: currentColor;
+        stroke: #05070b;
+        stroke-width: 2px;
+        paint-order: stroke;
+        font: 700 10px Inter, ui-sans-serif, system-ui, sans-serif;
+        text-anchor: middle;
+        dominant-baseline: middle;
+      }
+
+      .performance-breakdown {
+        position: absolute;
+        z-index: 20;
+        right: 12px;
+        bottom: 12px;
+        left: auto;
+        display: block;
+        width: min(320px, calc(100% - 24px));
+        max-height: calc(100% - 24px);
+        overflow: auto;
+        padding: 8px 10px;
+        border: 1px solid rgba(145, 158, 181, 0.24);
+        border-radius: 9px;
+        color: #9da8ba;
+        background: rgba(4, 7, 12, 0.88);
+        font-size: 0.62rem;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.25;
+        contain: layout paint style;
+        pointer-events: none;
+      }
+
+      .performance-breakdown strong {
+        display: block;
+        margin-bottom: 4px;
+        color: #dbe3f0;
+        font-size: 0.68rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .breakdown-toggle {
+        position: absolute;
+        top: 5px;
+        right: 6px;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(145, 158, 181, 0.3);
+        border-radius: 6px;
+        color: #dbe3f0;
+        background: #121722;
+        font: inherit;
+        line-height: 1;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+
+      .breakdown-toggle:hover { background: #20293a; }
+      .breakdown-toggle:focus-visible { outline: 2px solid #8aa4ff; outline-offset: 1px; }
+
+      .breakdown-close-icon {
+        font-size: 1rem;
+        line-height: 1;
+      }
+
+      .breakdown-stats-icon {
+        display: none;
+        width: 14px;
+        height: 14px;
+        fill: currentColor;
+      }
+
+      .performance-breakdown.is-collapsed {
+        top: auto;
+        right: 8px;
+        bottom: 8px;
+        left: auto;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border-radius: 8px;
+      }
+
+      .performance-breakdown.is-collapsed strong,
+      .performance-breakdown.is-collapsed table { display: none; }
+
+      .performance-breakdown.is-collapsed .breakdown-toggle {
+        inset: 3px;
+        width: 22px;
+        height: 22px;
+      }
+
+      .performance-breakdown.is-collapsed .breakdown-close-icon { display: none; }
+      .performance-breakdown.is-collapsed .breakdown-stats-icon { display: block; }
+
+      .performance-breakdown table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .performance-breakdown th,
+      .performance-breakdown td {
+        padding: 1px 0;
+        border-top: 1px solid rgba(145, 158, 181, 0.1);
+      }
+
+      .performance-breakdown th {
+        color: #9da8ba;
+        font-weight: 500;
+        text-align: left;
+        cursor: help;
+        text-decoration: underline dotted rgba(157, 168, 186, 0.65);
+        text-underline-offset: 2px;
+        pointer-events: auto;
+      }
+
+      .performance-breakdown td {
+        color: #eef2f8;
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .render-spinner {
+        width: 26px;
+        height: 26px;
+        border: 3px solid rgba(255, 255, 255, 0.18);
+        border-top-color: #9bb0ff;
+        border-radius: 50%;
+        animation: spin 700ms linear infinite;
+      }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      @media (prefers-reduced-motion: reduce) {
+        .render-spinner { animation: none; }
+      }
+
+      #div-renderer { isolation: isolate; }
+      #svg-renderer { display: block; }
+
+      #div-renderer .div-splat-stage {
+        transform: rotate(var(--camera-roll, 0deg));
+        transform-origin: 50% 50%;
+        will-change: transform;
+      }
+
+      #svg-renderer .svg-splat-stage {
+        transform: rotate(var(--camera-roll, 0deg));
+        transform-box: view-box;
+        transform-origin: 50% 50%;
+        will-change: transform;
+      }
+
+      .camera-controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+
+      .camera-controls legend {
+        width: 100%;
+        margin-bottom: 1px;
+        color: #929caf;
+        font-size: 0.68rem;
+        text-align: center;
+      }
+
+      .camera-control-group {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+        padding: 4px;
+        border: 1px solid #252b38;
+        border-radius: 10px;
+        background: rgba(13, 17, 25, 0.7);
+      }
+
+      .camera-control-group-label {
+        align-self: center;
+        margin: 0 4px;
+        color: #7f899b;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .auto-orbit-axis-control,
+      .model-axis-control {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding-left: 5px;
+        color: #929caf;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .auto-orbit-axis-control select,
+      .model-axis-control select {
+        width: 56px;
+        min-height: 32px;
+        padding: 0 6px;
+      }
+
+      .model-axis-control select { width: 62px; }
+
+      .camera-controls button {
+        min-width: 88px;
+        min-height: 32px;
+        padding: 0 9px;
+        border: 1px solid #343b4b;
+        border-radius: 8px;
+        color: #e8edf6;
+        background: #121722;
+        font-size: 0.75rem;
+        cursor: pointer;
+      }
+
+      .camera-controls button:hover { background: #1a2130; }
+      .camera-controls button:active { transform: translateY(1px); }
+      .camera-controls button:focus-visible { outline: 2px solid #8aa4ff; outline-offset: 2px; }
+
+      .error-toast {
+        position: fixed;
+        z-index: 30000;
+        top: 14px;
+        right: 14px;
+        width: min(430px, calc(100vw - 28px));
+        padding: 12px 42px 12px 14px;
+        border: 1px solid rgba(255, 104, 112, 0.55);
+        border-radius: 10px;
+        color: #ffdadd;
+        background: rgba(45, 12, 17, 0.96);
+        box-shadow: 0 18px 55px rgba(0, 0, 0, 0.45);
+        font-size: 0.78rem;
+      }
+
+      .error-toast[hidden] { display: none; }
+
+      .error-toast strong {
+        display: block;
+        margin-bottom: 5px;
+        color: #fff1f2;
+      }
+
+      .error-toast p {
+        margin: 3px 0;
+        color: #ffc5c9;
+        font-size: inherit;
+        line-height: 1.4;
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+      }
+
+      .error-toast code {
+        color: #fff;
+        overflow-wrap: anywhere;
+      }
+
+      .error-toast button {
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border: 1px solid rgba(255, 197, 201, 0.35);
+        border-radius: 6px;
+        color: #fff1f2;
+        background: transparent;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Gaussian splat renderer</h1>
+        <p>Right-handed coordinates: +X right, +Y up, +Z forward; camera starts on +Z looking at the fixed origin.</p>
+        <span id="status" role="status">Loading 3DGS PLY…</span>
+        <small id="credit">
+          Lego scene from
+          <a href="https://huggingface.co/datasets/rishitdagli/nerf-gs-datasets/tree/main/lego" target="_blank" rel="noreferrer">rishitdagli/nerf-gs-datasets</a>
+        </small>
+      </header>
+
+      <form class="controls" aria-label="Renderer controls" onsubmit="return false">
+        <label class="control model-control">
+          Model
+          <select id="model-select">
+            <option value="lego">Lego — 173,161 splats</option>
+            <option value="blackJacket">Black Jacket — 41,470 splats</option>
+          </select>
+        </label>
+
+        <label class="control renderer-select-control">
+          Renderer
+          <select id="renderer-select">
+            <option value="div">DIV renderer</option>
+            <option value="svg">SVG renderer</option>
+          </select>
+        </label>
+
+        <label class="control compute-select-control">
+          Compute
+          <select id="compute-backend">
+            <option value="cpu">CPU — JavaScript</option>
+            <option value="gpu">GPU — WebGPU</option>
+          </select>
+        </label>
+
+        <label class="control count-control">
+          <span class="count-heading">
+            <span>Gaussian count</span>
+            <output id="gaussian-count-output" for="gaussian-count">10,000</output>
+          </span>
+          <input id="gaussian-count" type="range" min="10000" max="173161" step="1" value="10000" />
+        </label>
+      </form>
+
+      <div id="renderer-grid" class="renderer-grid">
+        <section class="renderer-section" data-renderer-section="div">
+          <h2>Div renderer</h2>
+          <div class="viewport-slot">
+            <div class="viewport-shell" data-renderer-shell="div">
+            <div id="div-renderer" class="viewport" aria-label="Gaussian splats rendered with div elements"></div>
+            <div class="render-loader" role="status" aria-live="polite" aria-hidden="true">
+              <span class="render-spinner" aria-hidden="true"></span>
+              <span class="render-loader-text">Preparing DIV renderer…</span>
+            </div>
+            <svg class="axis-gizmo" viewBox="0 0 76 76" role="img" aria-label="World-axis orientation: X red, Y green, Z blue">
+              <title>World-axis orientation: X red, Y green, Z blue</title>
+              <g data-world-axis="x"><line x1="38" y1="38" x2="60" y2="38"></line><circle class="axis-endpoint" cx="60" cy="38" r="2"></circle><text x="67" y="38">X</text></g>
+              <g data-world-axis="y"><line x1="38" y1="38" x2="38" y2="16"></line><circle class="axis-endpoint" cx="38" cy="16" r="2"></circle><text x="38" y="9">Y</text></g>
+              <g data-world-axis="z"><line x1="38" y1="38" x2="38" y2="38"></line><circle class="axis-endpoint" cx="38" cy="38" r="3.5"></circle><text x="43" y="33">Z</text></g>
+              <circle class="axis-origin" cx="38" cy="38" r="2.25"></circle>
+            </svg>
+            <aside id="div-frame-breakdown" class="performance-breakdown" aria-label="DIV full frame breakdown">
+              <button class="breakdown-toggle" type="button" aria-expanded="true" title="Hide statistics" aria-label="Hide DIV statistics">
+                <span class="breakdown-close-icon" aria-hidden="true">×</span>
+                <svg class="breakdown-stats-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <rect x="2" y="9" width="3" height="5" rx="0.75"></rect>
+                  <rect x="6.5" y="5" width="3" height="9" rx="0.75"></rect>
+                  <rect x="11" y="2" width="3" height="12" rx="0.75"></rect>
+                </svg>
+              </button>
+              <strong>DIV frame breakdown</strong>
+              <table>
+                <tbody>
+                  <tr><th scope="row" title="Smoothed time between consecutive presented renderer updates. In streamed WebGPU mode this measures delivered frames, not requestAnimationFrame callbacks or dropped submissions.">Full frame</th><td><output data-phase="frame">—</output></td></tr>
+                  <tr><th scope="row" title="Projection backend selected for this frame. SH evaluation, packet preparation and DOM updates still run on the CPU.">Compute backend</th><td><output data-phase="backend">—</output></td></tr>
+                  <tr><th scope="row" title="CPU time spent evaluating degree-3 spherical harmonics to update view-dependent RGB colors. This remains CPU work for both backends in the first GPU baseline.">SH color (CPU)</th><td><output data-phase="sh">—</output></td></tr>
+                  <tr><th scope="row" title="Time spent translating sampled positions around the fixed model origin. This is normally zero after centered positions are cached.">Centering</th><td><output data-phase="centering">—</output></td></tr>
+                  <tr><th scope="row" title="End-to-end projection time. CPU uses the JavaScript loop; WebGPU includes initialization or upload, compute dispatch, GPU-to-CPU readback and result decoding.">Projection total</th><td><output data-phase="projection">—</output></td></tr>
+                  <tr><th scope="row" title="One-time WebGPU device/pipeline initialization and cached sample-buffer upload. This is zero on steady-state frames.">GPU setup/upload</th><td><output data-phase="gpuSetup">—</output></td></tr>
+                  <tr><th scope="row" title="JavaScript time spent encoding and submitting the WebGPU compute pass. This is not the GPU execution duration.">GPU submit</th><td><output data-phase="gpuSubmit">—</output></td></tr>
+                  <tr><th scope="row" title="Time awaiting the WebGPU staging buffer. This includes GPU execution, copying and synchronization needed before DOM/SVG can consume results.">GPU readback</th><td><output data-phase="gpuReadback">—</output></td></tr>
+                  <tr><th scope="row" title="CPU time compacting valid WebGPU output rows into reusable projected-point objects.">GPU decode</th><td><output data-phase="gpuDecode">—</output></td></tr>
+                  <tr><th scope="row" title="Time spent updating reusable render packets: coordinates, transforms, colors, quantized z-index and SVG depth buckets.">Packet prep</th><td><output data-phase="processor">—</output></td></tr>
+                  <tr><th scope="row" title="JavaScript time spent reusing the persistent DIV splat pool and assigning each node's position, size, transform, color, opacity and z-index. It excludes browser style recalculation, layout, paint and compositing.">DIV DOM update</th><td><output data-phase="ownDom">—</output></td></tr>
+                  <tr><th scope="row" title="Approximate JavaScript heap change measured around this renderer's DOM work. This excludes much native DOM and GPU memory.">Est. JS heap Δ</th><td><output data-phase="heap">—</output></td></tr>
+                  <tr><th scope="row" title="Number of Gaussian splats processed by this renderer in the current frame.">Splat count</th><td><output data-phase="count">—</output></td></tr>
+                  <tr><th scope="row" title="Residual frame time after measured JavaScript phases: style recalculation, layout, paint, alpha compositing, garbage collection, scheduling and uninstrumented work.">Browser + other</th><td><output data-phase="browser">—</output></td></tr>
+                </tbody>
+              </table>
+            </aside>
+            </div>
+          </div>
+        </section>
+
+        <section class="renderer-section" data-renderer-section="svg">
+          <h2>SVG renderer</h2>
+          <div class="viewport-slot">
+            <div class="viewport-shell" data-renderer-shell="svg">
+            <svg id="svg-renderer" class="viewport" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Gaussian splats rendered with SVG elements"></svg>
+            <div class="render-loader" role="status" aria-live="polite" aria-hidden="true">
+              <span class="render-spinner" aria-hidden="true"></span>
+              <span class="render-loader-text">Preparing SVG renderer…</span>
+            </div>
+            <svg class="axis-gizmo" viewBox="0 0 76 76" role="img" aria-label="World-axis orientation: X red, Y green, Z blue">
+              <title>World-axis orientation: X red, Y green, Z blue</title>
+              <g data-world-axis="x"><line x1="38" y1="38" x2="60" y2="38"></line><circle class="axis-endpoint" cx="60" cy="38" r="2"></circle><text x="67" y="38">X</text></g>
+              <g data-world-axis="y"><line x1="38" y1="38" x2="38" y2="16"></line><circle class="axis-endpoint" cx="38" cy="16" r="2"></circle><text x="38" y="9">Y</text></g>
+              <g data-world-axis="z"><line x1="38" y1="38" x2="38" y2="38"></line><circle class="axis-endpoint" cx="38" cy="38" r="3.5"></circle><text x="43" y="33">Z</text></g>
+              <circle class="axis-origin" cx="38" cy="38" r="2.25"></circle>
+            </svg>
+            <aside id="svg-frame-breakdown" class="performance-breakdown" aria-label="SVG full frame breakdown">
+              <button class="breakdown-toggle" type="button" aria-expanded="true" title="Hide statistics" aria-label="Hide SVG statistics">
+                <span class="breakdown-close-icon" aria-hidden="true">×</span>
+                <svg class="breakdown-stats-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <rect x="2" y="9" width="3" height="5" rx="0.75"></rect>
+                  <rect x="6.5" y="5" width="3" height="9" rx="0.75"></rect>
+                  <rect x="11" y="2" width="3" height="12" rx="0.75"></rect>
+                </svg>
+              </button>
+              <strong>SVG frame breakdown</strong>
+              <table>
+                <tbody>
+                  <tr><th scope="row" title="Smoothed time between consecutive presented renderer updates. In streamed WebGPU mode this measures delivered frames, not requestAnimationFrame callbacks or dropped submissions.">Full frame</th><td><output data-phase="frame">—</output></td></tr>
+                  <tr><th scope="row" title="Projection backend selected for this frame. SH evaluation, packet preparation and DOM updates still run on the CPU.">Compute backend</th><td><output data-phase="backend">—</output></td></tr>
+                  <tr><th scope="row" title="CPU time spent evaluating degree-3 spherical harmonics to update view-dependent RGB colors. This remains CPU work for both backends in the first GPU baseline.">SH color (CPU)</th><td><output data-phase="sh">—</output></td></tr>
+                  <tr><th scope="row" title="Time spent translating sampled positions around the fixed model origin. This is normally zero after centered positions are cached.">Centering</th><td><output data-phase="centering">—</output></td></tr>
+                  <tr><th scope="row" title="End-to-end projection time. CPU uses the JavaScript loop; WebGPU includes initialization or upload, compute dispatch, GPU-to-CPU readback and result decoding.">Projection total</th><td><output data-phase="projection">—</output></td></tr>
+                  <tr><th scope="row" title="One-time WebGPU device/pipeline initialization and cached sample-buffer upload. This is zero on steady-state frames.">GPU setup/upload</th><td><output data-phase="gpuSetup">—</output></td></tr>
+                  <tr><th scope="row" title="JavaScript time spent encoding and submitting the WebGPU compute pass. This is not the GPU execution duration.">GPU submit</th><td><output data-phase="gpuSubmit">—</output></td></tr>
+                  <tr><th scope="row" title="Time awaiting the WebGPU staging buffer. This includes GPU execution, copying and synchronization needed before DOM/SVG can consume results.">GPU readback</th><td><output data-phase="gpuReadback">—</output></td></tr>
+                  <tr><th scope="row" title="CPU time compacting valid WebGPU output rows into reusable projected-point objects.">GPU decode</th><td><output data-phase="gpuDecode">—</output></td></tr>
+                  <tr><th scope="row" title="Time spent updating reusable render packets: coordinates, transforms, colors, quantized z-index and SVG depth buckets.">Packet prep</th><td><output data-phase="processor">—</output></td></tr>
+                  <tr><th scope="row" title="JavaScript time spent rebuilding SVG depth groups and ellipse elements.">SVG DOM</th><td><output data-phase="ownDom">—</output></td></tr>
+                  <tr><th scope="row" title="Approximate JavaScript heap change measured around this renderer's DOM work. This excludes much native DOM and GPU memory.">Est. JS heap Δ</th><td><output data-phase="heap">—</output></td></tr>
+                  <tr><th scope="row" title="Number of Gaussian splats processed by this renderer in the current frame.">Splat count</th><td><output data-phase="count">—</output></td></tr>
+                  <tr><th scope="row" title="Residual frame time after measured JavaScript phases: style recalculation, layout, paint, alpha compositing, garbage collection, scheduling and uninstrumented work.">Browser + other</th><td><output data-phase="browser">—</output></td></tr>
+                </tbody>
+              </table>
+            </aside>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <fieldset class="camera-controls" aria-label="Camera movement controls">
+        <legend>Move camera around the fixed model</legend>
+        <div class="camera-control-group" role="group" aria-label="Model orientation">
+          <span class="camera-control-group-label">Model axes</span>
+          <label class="model-axis-control">
+            Up
+            <select id="model-up-axis" aria-label="Model up axis">
+              <option value="+x">+X</option><option value="-x">−X</option>
+              <option value="+y" selected>+Y</option><option value="-y">−Y</option>
+              <option value="+z">+Z</option><option value="-z">−Z</option>
+            </select>
+          </label>
+          <label class="model-axis-control">
+            Front
+            <select id="model-front-axis" aria-label="Model front axis">
+              <option value="+x">+X</option><option value="-x">−X</option>
+              <option value="+y">+Y</option><option value="-y">−Y</option>
+              <option value="+z" selected>+Z</option><option value="-z">−Z</option>
+            </select>
+          </label>
+        </div>
+        <div class="camera-control-group" role="group" aria-label="Orbit camera">
+          <span class="camera-control-group-label">Orbit</span>
+          <button type="button" data-camera-action="left">← Orbit left 90°</button>
+          <button type="button" data-camera-action="right">Orbit right 90° →</button>
+          <button type="button" data-camera-action="up">↑ Orbit up 90°</button>
+          <button type="button" data-camera-action="down">↓ Orbit down 90°</button>
+          <label class="auto-orbit-axis-control">
+            Auto axis
+            <select id="auto-orbit-axis" aria-label="Auto-orbit axis">
+              <option value="x">X</option>
+              <option value="y" selected>Y</option>
+              <option value="z">Z</option>
+            </select>
+          </label>
+          <button id="auto-orbit-button" type="button" data-camera-action="autoOrbit" aria-pressed="false">▶ Start auto orbit</button>
+        </div>
+        <div class="camera-control-group" role="group" aria-label="Roll camera">
+          <span class="camera-control-group-label">Roll</span>
+          <button type="button" data-camera-action="rollLeft">↶ Roll left 90°</button>
+          <button type="button" data-camera-action="rollRight">Roll right 90° ↷</button>
+        </div>
+        <div class="camera-control-group" role="group" aria-label="Camera distance">
+          <span class="camera-control-group-label">Distance</span>
+          <button type="button" data-camera-action="closer">＋ Closer</button>
+          <button type="button" data-camera-action="farther">− Farther</button>
+          <button type="button" data-camera-action="reset">Reset camera</button>
+        </div>
+      </fieldset>
+    </main>
+
+    <aside id="webgpu-error" class="error-toast" role="alert" aria-live="assertive" aria-atomic="true" hidden>
+      <button id="dismiss-webgpu-error" type="button" aria-label="Dismiss WebGPU error">×</button>
+      <strong>WebGPU unavailable — using CPU</strong>
+      <p id="webgpu-error-reason"></p>
+      <p id="webgpu-error-guidance"></p>
+      <p>Current origin: <code id="webgpu-error-origin"></code></p>
+    </aside>
+
+    <script src="./splatreader.js"></script>
+    <script src="./plyreader.js"></script>
+    <script src="./webgpuprocessor.js"></script>
+    <script src="./splatprocessor.js"></script>
+    <script src="./divsplat.js"></script>
+    <script src="./svgsplat.js"></script>
+    <script>
+      const models = {
+        lego: {
+          name: "Colorful Lego",
+          url: "./assets/lego_3dgs.ply",
+          sourceCount: 173161,
+          center: { x: 0, y: 0, z: 0.3 },
+          cameraDistance: 3.6,
+          upAxis: "+y",
+          frontAxis: "+z",
+          creditLabel: "rishitdagli/nerf-gs-datasets",
+          creditUrl: "https://huggingface.co/datasets/rishitdagli/nerf-gs-datasets/tree/main/lego"
+        },
+        blackJacket: {
+          name: "Black Jacket",
+          url: "./assets/blackjacket_3dgs.ply",
+          sourceCount: 41470,
+          center: { x: 0.022812575101852417, y: -0.9561071861535311, z: 0.03183269500732422 },
+          cameraDistance: 2.6,
+          upAxis: "+y",
+          frontAxis: "+z",
+          creditLabel: "Geofront Gaussian Splatting Library (CC BY 4.0)",
+          creditUrl: "https://geofront.eu/splatting_guide/"
+        }
+      };
+
+      const parsedModelCache = new Map();
+      const sampledGaussianCache = new Map();
+      const modelSelect = document.querySelector("#model-select");
+      const countInput = document.querySelector("#gaussian-count");
+      const countOutput = document.querySelector("#gaussian-count-output");
+      const rendererSelect = document.querySelector("#renderer-select");
+      const computeBackendSelect = document.querySelector("#compute-backend");
+      const gpuBackendOption = computeBackendSelect.querySelector('option[value="gpu"]');
+      const rendererPreferencesKey = "domgauss.renderer-preferences";
+      const status = document.querySelector("#status");
+      const webGpuError = document.querySelector("#webgpu-error");
+      const webGpuErrorReason = document.querySelector("#webgpu-error-reason");
+      const webGpuErrorGuidance = document.querySelector("#webgpu-error-guidance");
+      const webGpuErrorOrigin = document.querySelector("#webgpu-error-origin");
+      const dismissWebGpuError = document.querySelector("#dismiss-webgpu-error");
+      const description = document.querySelector("header p");
+      const credit = document.querySelector("#credit");
+      const divRenderer = new DivSplatRenderer(document.querySelector("#div-renderer"));
+      const svgRenderer = new SvgSplatRenderer(document.querySelector("#svg-renderer"));
+      const divShell = document.querySelector('[data-renderer-shell="div"]');
+      const svgShell = document.querySelector('[data-renderer-shell="svg"]');
+      const divLoader = divShell.querySelector(".render-loader");
+      const svgLoader = svgShell.querySelector(".render-loader");
+      const divAxisGizmo = cacheAxisGizmo(divShell);
+      const svgAxisGizmo = cacheAxisGizmo(svgShell);
+      const rendererGrid = document.querySelector("#renderer-grid");
+      const divSection = document.querySelector('[data-renderer-section="div"]');
+      const svgSection = document.querySelector('[data-renderer-section="svg"]');
+      const divFrameBreakdown = document.querySelector("#div-frame-breakdown");
+      const svgFrameBreakdown = document.querySelector("#svg-frame-breakdown");
+      const modelUpAxisSelect = document.querySelector("#model-up-axis");
+      const modelFrontAxisSelect = document.querySelector("#model-front-axis");
+      const autoOrbitAxisSelect = document.querySelector("#auto-orbit-axis");
+      const autoOrbitButton = document.querySelector("#auto-orbit-button");
+      let renderGeneration = 0;
+      let lastRenderMetrics = null;
+      let autoOrbitActive = false;
+      let autoOrbitFrameId = null;
+      let autoOrbitLastTimestamp = null;
+      let autoOrbitSmoothedFrameMs = null;
+      let autoOrbitSmoothedPhases = null;
+      let autoOrbitLastStatsUpdate = null;
+      let autoOrbitLastPresentedAt = null;
+      let autoOrbitSession = 0;
+      let autoOrbitFrameSequence = 0;
+      let autoOrbitLastPresentedSequence = 0;
+      let autoOrbitDroppedFrames = 0;
+      const modelOrientationCache = new Map();
+      let activeOrientationUrl = null;
+      let webGpuProcessorPromise = null;
+      let webGpuInitializationReported = false;
+      let cameraState = {
+        direction: { x: 0, y: 0, z: 1 },
+        up: { x: 0, y: 1, z: 0 },
+        roll: 0,
+        distance: models[modelSelect.value].cameraDistance
+      };
+
+      function loadRendererPreferences() {
+        try {
+          const preferences = JSON.parse(localStorage.getItem(rendererPreferencesKey));
+          if (preferences?.renderer === "div" || preferences?.renderer === "svg") {
+            rendererSelect.value = preferences.renderer;
+          } else if (preferences?.svg === true && preferences?.div !== true) {
+            rendererSelect.value = "svg";
+          }
+          if (preferences?.computeBackend === "cpu" || preferences?.computeBackend === "gpu") {
+            computeBackendSelect.value = preferences.computeBackend;
+          }
+        } catch (error) {
+          console.warn("Unable to restore renderer preferences.", error);
+        }
+      }
+
+      function saveRendererPreferences() {
+        try {
+          localStorage.setItem(rendererPreferencesKey, JSON.stringify({
+            renderer: rendererSelect.value,
+            computeBackend: computeBackendSelect.value
+          }));
+        } catch (error) {
+          console.warn("Unable to save renderer preferences.", error);
+        }
+      }
+
+      async function getWebGpuProcessor() {
+        if (!webGpuProcessorPromise) {
+          webGpuProcessorPromise = WebGpuSplatProcessor.create();
+        }
+        return webGpuProcessorPromise;
+      }
+
+      function showWebGpuError(reason) {
+        webGpuErrorReason.textContent = reason;
+        webGpuErrorOrigin.textContent = location.origin;
+        webGpuErrorGuidance.textContent = window.isSecureContext
+          ? "This origin is secure. Check browser WebGPU support, hardware acceleration, and chrome://gpu."
+          : "Chrome: add this exact origin to chrome://flags/#unsafely-treat-insecure-origin-as-secure, relaunch, reload, and select GPU again.";
+        webGpuError.hidden = false;
+      }
+
+      function hideWebGpuError() {
+        webGpuError.hidden = true;
+      }
+
+      function disableWebGpu(error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        console.warn("WebGPU projection unavailable; falling back to CPU.", error);
+        gpuBackendOption.disabled = true;
+        gpuBackendOption.title = reason;
+        computeBackendSelect.value = "cpu";
+        webGpuProcessorPromise = null;
+        saveRendererPreferences();
+        showWebGpuError(reason);
+        return reason;
+      }
+
+      async function loadParsedModel(url) {
+        if (!parsedModelCache.has(url)) {
+          parsedModelCache.set(url, fetch(url)
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error(`Unable to load ${url}: ${response.status} ${response.statusText}`);
+              }
+              return response.arrayBuffer();
+            })
+            .then((downloadedBuffer) => PlyReader.parseModel(downloadedBuffer))
+            .catch((error) => {
+              parsedModelCache.delete(url);
+              throw error;
+            }));
+        }
+        return parsedModelCache.get(url);
+      }
+
+      function clearParsedModelCache(url) {
+        if (url) {
+          parsedModelCache.delete(url);
+          sampledGaussianCache.delete(url);
+          modelOrientationCache.delete(url);
+          if (activeOrientationUrl === url) activeOrientationUrl = null;
+        } else {
+          parsedModelCache.clear();
+          sampledGaussianCache.clear();
+          modelOrientationCache.clear();
+          activeOrientationUrl = null;
+        }
+      }
+
+      function getCachedGaussianSample(url, parsedModel, requestedCount, modelCenter) {
+        let entry = sampledGaussianCache.get(url);
+        if (!entry || entry.count !== requestedCount) {
+          const sample = PlyReader.createSample(parsedModel, { maxPoints: requestedCount });
+          const centeringStartTime = performance.now();
+          for (const point of sample.points) {
+            point.centeredPosition = {
+              x: point.position.x - modelCenter.x,
+              y: point.position.y - modelCenter.y,
+              z: point.position.z - modelCenter.z
+            };
+          }
+          sample.centeringDuration = performance.now() - centeringStartTime;
+          sample.projectedPoints = [];
+          sample.gpuProjectedPoints = [];
+          sample.renderPackets = [];
+          entry = {
+            count: requestedCount,
+            sample
+          };
+          sampledGaussianCache.set(url, entry);
+        }
+        return entry.sample;
+      }
+
+      window.clearParsedModelCache = clearParsedModelCache;
+
+      function updateCountLabel() {
+        countOutput.value = `${Number(countInput.value).toLocaleString()} / ${Number(countInput.max).toLocaleString()}`;
+      }
+
+      function updateModelControls() {
+        const model = models[modelSelect.value];
+        countInput.max = model.sourceCount;
+        if (Number(countInput.value) > model.sourceCount) {
+          countInput.value = model.sourceCount;
+        }
+        updateCountLabel();
+      }
+
+      function axisDimension(axis) {
+        return axis.at(-1);
+      }
+
+      function axisVector(axis) {
+        const sign = axis.startsWith("-") ? -1 : 1;
+        const dimension = axisDimension(axis);
+        return {
+          x: dimension === "x" ? sign : 0,
+          y: dimension === "y" ? sign : 0,
+          z: dimension === "z" ? sign : 0
+        };
+      }
+
+      function perpendicularFrontFallback(upAxis) {
+        return axisDimension(upAxis) === "z" ? "+y" : "+z";
+      }
+
+      function constrainFrontAxis() {
+        const upDimension = axisDimension(modelUpAxisSelect.value);
+        for (const option of modelFrontAxisSelect.options) {
+          option.disabled = axisDimension(option.value) === upDimension;
+        }
+        if (axisDimension(modelFrontAxisSelect.value) === upDimension) {
+          modelFrontAxisSelect.value = perpendicularFrontFallback(modelUpAxisSelect.value);
+        }
+      }
+
+      function activateModelOrientation(model, parsedModel) {
+        let orientation = modelOrientationCache.get(model.url);
+        if (!orientation) {
+          const metadataUp = parsedModel.metadata?.upAxis;
+          const up = metadataUp ?? model.upAxis ?? "+y";
+          let front = parsedModel.metadata?.frontAxis ?? model.frontAxis ?? "+z";
+          if (axisDimension(front) === axisDimension(up)) {
+            front = perpendicularFrontFallback(up);
+          }
+          orientation = {
+            up,
+            front,
+            upSource: metadataUp ? "PLY metadata" : "default",
+            frontSource: parsedModel.metadata?.frontAxis ? "PLY metadata" : "default"
+          };
+          modelOrientationCache.set(model.url, orientation);
+        }
+
+        const modelChanged = activeOrientationUrl !== model.url;
+        if (modelChanged) {
+          modelUpAxisSelect.value = orientation.up;
+          modelFrontAxisSelect.value = orientation.front;
+          constrainFrontAxis();
+          activeOrientationUrl = model.url;
+          resetCamera();
+          applyCameraRoll();
+        }
+        return orientation;
+      }
+
+      function saveOrientationOverride() {
+        constrainFrontAxis();
+        const model = models[modelSelect.value];
+        modelOrientationCache.set(model.url, {
+          up: modelUpAxisSelect.value,
+          front: modelFrontAxisSelect.value,
+          upSource: "user",
+          frontSource: "user"
+        });
+        activeOrientationUrl = model.url;
+      }
+
+      function syncRendererSections() {
+        const renderDiv = rendererSelect.value === "div";
+        const selectedSection = renderDiv ? divSection : svgSection;
+        const inactiveRenderer = renderDiv ? svgRenderer : divRenderer;
+        const inactiveShell = renderDiv ? svgShell : divShell;
+        const inactiveLoader = renderDiv ? svgLoader : divLoader;
+
+        inactiveRenderer.clear();
+        inactiveShell.classList.remove("is-loading");
+        inactiveLoader.setAttribute("aria-hidden", "true");
+        rendererGrid.replaceChildren(selectedSection);
+      }
+
+      function resetCamera() {
+        cameraState = {
+          direction: axisVector(modelFrontAxisSelect.value),
+          up: axisVector(modelUpAxisSelect.value),
+          roll: 0,
+          distance: models[modelSelect.value].cameraDistance
+        };
+      }
+
+      function cameraOffset() {
+        return {
+          x: cameraState.direction.x * cameraState.distance,
+          y: cameraState.direction.y * cameraState.distance,
+          z: cameraState.direction.z * cameraState.distance
+        };
+      }
+
+      function cameraWorldUp() {
+        return cameraState.up;
+      }
+
+      function normalizeAngle(angle) {
+        return Math.atan2(Math.sin(angle), Math.cos(angle));
+      }
+
+      function rotateVectorAroundAxis(vector, axis, angle) {
+        const cosine = Math.cos(angle);
+        const sine = Math.sin(angle);
+        const dot = vector.x * axis.x + vector.y * axis.y + vector.z * axis.z;
+        const cross = SplatReader.cross(axis, vector);
+        return {
+          x: vector.x * cosine + cross.x * sine + axis.x * dot * (1 - cosine),
+          y: vector.y * cosine + cross.y * sine + axis.y * dot * (1 - cosine),
+          z: vector.z * cosine + cross.z * sine + axis.z * dot * (1 - cosine)
+        };
+      }
+
+      function rotateCameraRig(axis, angle) {
+        const normalizedAxis = SplatReader.normalizeVector(axis);
+        const direction = SplatReader.normalizeVector(
+          rotateVectorAroundAxis(cameraState.direction, normalizedAxis, angle)
+        );
+        const rotatedUp = rotateVectorAroundAxis(cameraState.up, normalizedAxis, angle);
+        const upDotDirection =
+          rotatedUp.x * direction.x +
+          rotatedUp.y * direction.y +
+          rotatedUp.z * direction.z;
+        cameraState.direction = direction;
+        cameraState.up = SplatReader.normalizeVector({
+          x: rotatedUp.x - direction.x * upDotDirection,
+          y: rotatedUp.y - direction.y * upDotDirection,
+          z: rotatedUp.z - direction.z * upDotDirection
+        });
+      }
+
+      function autoOrbitAxis() {
+        if (autoOrbitAxisSelect.value === "x") return { x: 1, y: 0, z: 0 };
+        if (autoOrbitAxisSelect.value === "z") return { x: 0, y: 0, z: 1 };
+        return { x: 0, y: 1, z: 0 };
+      }
+
+      function cacheAxisGizmo(shell) {
+        const vectors = {
+          x: { x: 1, y: 0, z: 0 },
+          y: { x: 0, y: 1, z: 0 },
+          z: { x: 0, y: 0, z: 1 }
+        };
+        return Array.from(shell.querySelectorAll("[data-world-axis]"), (group) => ({
+          vector: vectors[group.dataset.worldAxis],
+          group,
+          line: group.querySelector("line"),
+          endpoint: group.querySelector(".axis-endpoint"),
+          label: group.querySelector("text")
+        }));
+      }
+
+      function updateAxisGizmo() {
+        const axes = rendererSelect.value === "div" ? divAxisGizmo : svgAxisGizmo;
+        const forward = {
+          x: -cameraState.direction.x,
+          y: -cameraState.direction.y,
+          z: -cameraState.direction.z
+        };
+        const right = SplatReader.normalizeVector(SplatReader.cross(forward, cameraState.up));
+        const cameraUp = SplatReader.normalizeVector(SplatReader.cross(right, forward));
+        const cosine = Math.cos(cameraState.roll);
+        const sine = Math.sin(cameraState.roll);
+        const center = 38;
+        const axisLength = 22;
+
+        for (const axis of axes) {
+          const screenX =
+            axis.vector.x * right.x +
+            axis.vector.y * right.y +
+            axis.vector.z * right.z;
+          const screenY = -(
+            axis.vector.x * cameraUp.x +
+            axis.vector.y * cameraUp.y +
+            axis.vector.z * cameraUp.z
+          );
+          const rolledX = screenX * cosine - screenY * sine;
+          const rolledY = screenX * sine + screenY * cosine;
+          const projectedLength = Math.hypot(rolledX, rolledY);
+          const endX = center + rolledX * axisLength;
+          const endY = center + rolledY * axisLength;
+          const labelDirectionX = projectedLength > 0.08 ? rolledX / projectedLength : 0.7;
+          const labelDirectionY = projectedLength > 0.08 ? rolledY / projectedLength : -0.7;
+          const depth =
+            axis.vector.x * cameraState.direction.x +
+            axis.vector.y * cameraState.direction.y +
+            axis.vector.z * cameraState.direction.z;
+
+          axis.line.setAttribute("x2", endX.toFixed(2));
+          axis.line.setAttribute("y2", endY.toFixed(2));
+          axis.endpoint.setAttribute("cx", endX.toFixed(2));
+          axis.endpoint.setAttribute("cy", endY.toFixed(2));
+          axis.endpoint.setAttribute("r", projectedLength > 0.08 ? "2" : "3.5");
+          axis.label.setAttribute("x", (endX + labelDirectionX * 7).toFixed(2));
+          axis.label.setAttribute("y", (endY + labelDirectionY * 7).toFixed(2));
+          axis.group.style.opacity = (0.55 + 0.4 * (depth + 1) / 2).toFixed(2);
+        }
+      }
+
+      function applyCameraRoll() {
+        const roll = `${cameraState.roll * 180 / Math.PI}deg`;
+        const activeViewport = rendererSelect.value === "div"
+          ? divRenderer.container
+          : svgRenderer.svg;
+        activeViewport.style.setProperty("--camera-roll", roll);
+      }
+
+      function updateCompletedStatus() {
+        if (!lastRenderMetrics) return;
+        const azimuthDegrees = Math.round(Math.atan2(cameraState.direction.x, cameraState.direction.z) * 180 / Math.PI);
+        const elevationDegrees = Math.round(Math.asin(Math.max(-1, Math.min(1, cameraState.direction.y))) * 180 / Math.PI);
+        const rollDegrees = Math.round(cameraState.roll * 180 / Math.PI);
+        const rendererName = rendererSelect.value === "div" ? "DIV" : "SVG";
+        const depthMethod = rendererSelect.value === "div"
+          ? "unsorted quantized z-index"
+          : "256 SVG depth buckets";
+        const computeMethod = lastRenderMetrics.computeBackend === "gpu"
+          ? autoOrbitActive
+            ? `WebGPU projection · 3-stage stream · ${autoOrbitDroppedFrames.toLocaleString()} dropped`
+            : "WebGPU projection"
+          : "CPU projection";
+        const autoOrbitStatus = autoOrbitActive ? ` · auto ${autoOrbitAxisSelect.value.toUpperCase()} axis` : "";
+        const computeWarning = lastRenderMetrics.computeWarning
+          ? ` · GPU fallback: ${lastRenderMetrics.computeWarning}`
+          : "";
+        status.textContent = `${lastRenderMetrics.visible.toLocaleString()} projected of ${lastRenderMetrics.sampled.toLocaleString()} sampled / ${lastRenderMetrics.source.toLocaleString()} source splats · ${rendererName} renderer · ${computeMethod} · ${depthMethod} · shared prep ${lastRenderMetrics.processorDuration.toFixed(1)} ms · camera ${azimuthDegrees}° az / ${elevationDegrees}° el / ${rollDegrees}° roll / ${cameraState.distance.toFixed(2)} distance${autoOrbitStatus}${computeWarning}`;
+        status.title = status.textContent;
+      }
+
+      function updateAutoOrbitButton() {
+        autoOrbitButton.setAttribute("aria-pressed", String(autoOrbitActive));
+        autoOrbitButton.textContent = autoOrbitActive ? "■ Stop auto orbit" : "▶ Start auto orbit";
+        updateCompletedStatus();
+        updateFrameBreakdowns();
+      }
+
+      function updateFrameBreakdown(panel, ownRenderer) {
+        const phases = autoOrbitSmoothedPhases ?? lastRenderMetrics?.phases;
+        if (!phases) return;
+        const frameDuration = autoOrbitSmoothedFrameMs;
+        const measuredDuration =
+          phases.sh +
+          phases.centering +
+          phases.projection +
+          phases.processor +
+          phases.divDom +
+          phases.svgDom;
+        const values = {
+          frame: frameDuration,
+          backend: lastRenderMetrics.computeBackend === "gpu" ? "WebGPU" : "CPU",
+          sh: phases.sh,
+          centering: phases.centering,
+          projection: phases.projection,
+          gpuSetup: phases.gpuSetup,
+          gpuSubmit: phases.gpuSubmit,
+          gpuReadback: phases.gpuReadback,
+          gpuDecode: phases.gpuDecode,
+          processor: phases.processor,
+          ownDom: ownRenderer === "div" ? phases.divDom : phases.svgDom,
+          heap: ownRenderer === "div"
+            ? lastRenderMetrics.divHeapDelta
+            : lastRenderMetrics.svgHeapDelta,
+          count: lastRenderMetrics.visible,
+          browser: frameDuration === null ? null : Math.max(0, frameDuration - measuredDuration)
+        };
+
+        for (const output of panel.querySelectorAll("output[data-phase]")) {
+          const phase = output.dataset.phase;
+          if (phase === "backend") {
+            output.value = values.backend;
+            continue;
+          }
+          if (phase.startsWith("gpu") && lastRenderMetrics.computeBackend !== "gpu") {
+            output.value = "—";
+            continue;
+          }
+          if (phase === "heap") {
+            output.value = formatByteDelta(values.heap);
+            continue;
+          }
+          if (phase === "count") {
+            output.value = Number(values.count).toLocaleString();
+            continue;
+          }
+          const duration = values[phase];
+          if (!Number.isFinite(duration)) {
+            output.value = "—";
+            continue;
+          }
+          if (phase === "frame") {
+            output.value = `${duration.toFixed(1)} ms · ${(1000 / Math.max(1, duration)).toFixed(1)} FPS`;
+            continue;
+          }
+          const percentage = frameDuration && phase !== "frame"
+            ? ` · ${Math.min(100, duration / frameDuration * 100).toFixed(0)}%`
+            : "";
+          output.value = `${duration.toFixed(1)} ms${percentage}`;
+        }
+      }
+
+      function updateFrameBreakdowns() {
+        if (rendererSelect.value === "div") {
+          updateFrameBreakdown(divFrameBreakdown, "div");
+        } else {
+          updateFrameBreakdown(svgFrameBreakdown, "svg");
+        }
+      }
+
+      function stopAutoOrbit() {
+        autoOrbitActive = false;
+        autoOrbitSession += 1;
+        if (autoOrbitFrameId !== null) cancelAnimationFrame(autoOrbitFrameId);
+        autoOrbitFrameId = null;
+        autoOrbitLastTimestamp = null;
+        updateAutoOrbitButton();
+      }
+
+      function recordAutoOrbitPresentation(presentedAt) {
+        if (autoOrbitLastPresentedAt !== null) {
+          const frameDuration = presentedAt - autoOrbitLastPresentedAt;
+          autoOrbitSmoothedFrameMs = autoOrbitSmoothedFrameMs === null
+            ? frameDuration
+            : autoOrbitSmoothedFrameMs * 0.75 + frameDuration * 0.25;
+        }
+        autoOrbitLastPresentedAt = presentedAt;
+        if (lastRenderMetrics?.phases) {
+          if (autoOrbitSmoothedPhases === null) {
+            autoOrbitSmoothedPhases = { ...lastRenderMetrics.phases };
+          } else {
+            for (const phase of Object.keys(autoOrbitSmoothedPhases)) {
+              autoOrbitSmoothedPhases[phase] = phase === "gpuSetup"
+                ? lastRenderMetrics.phases[phase]
+                : autoOrbitSmoothedPhases[phase] * 0.75 +
+                  lastRenderMetrics.phases[phase] * 0.25;
+            }
+          }
+        }
+        if (
+          autoOrbitLastStatsUpdate === null ||
+          presentedAt - autoOrbitLastStatsUpdate >= 250
+        ) {
+          autoOrbitLastStatsUpdate = presentedAt;
+          updateAutoOrbitButton();
+        }
+      }
+
+      async function submitPipelinedGpuFrame() {
+        const session = autoOrbitSession;
+        const generation = renderGeneration;
+        const sequence = ++autoOrbitFrameSequence;
+        const model = models[modelSelect.value];
+        const requestedCount = Number(countInput.value);
+        const renderDiv = rendererSelect.value === "div";
+        const offset = cameraOffset();
+        const worldUp = { ...cameraWorldUp() };
+        const cameraPosition = {
+          x: model.center.x + offset.x,
+          y: model.center.y + offset.y,
+          z: model.center.z + offset.z
+        };
+
+        try {
+          const parsedModel = await loadParsedModel(model.url);
+          if (!autoOrbitActive || session !== autoOrbitSession || generation !== renderGeneration) return;
+          const cachedGaussianSample = getCachedGaussianSample(
+            model.url,
+            parsedModel,
+            requestedCount,
+            model.center
+          );
+          const gpuProcessor = await getWebGpuProcessor();
+          if (!autoOrbitActive || session !== autoOrbitSession || generation !== renderGeneration) return;
+          const initializationDuration = webGpuInitializationReported
+            ? 0
+            : gpuProcessor.initializationDuration;
+          webGpuInitializationReported = true;
+          const projectionStartTime = performance.now();
+          const completion = gpuProcessor.tryProject(cachedGaussianSample.points, {
+            cameraPosition: offset,
+            target: { x: 0, y: 0, z: 0 },
+            worldUp,
+            fieldOfView: 50
+          });
+          if (!completion) {
+            autoOrbitDroppedFrames += 1;
+            return;
+          }
+
+          const result = await completion;
+          if (
+            !autoOrbitActive ||
+            session !== autoOrbitSession ||
+            generation !== renderGeneration ||
+            sequence <= autoOrbitLastPresentedSequence
+          ) return;
+
+          const projectionDuration = performance.now() - projectionStartTime;
+          const shStartTime = performance.now();
+          const splat = PlyReader.updateSampleColors(cachedGaussianSample, { cameraPosition });
+          for (const projected of result.points) {
+            projected.color = splat.points[projected.inputIndex].color;
+          }
+          const shDuration = performance.now() - shStartTime;
+          const processorStartTime = performance.now();
+          const renderPackets = SplatProcessor.prepare(
+            result.points,
+            cachedGaussianSample.renderPackets
+          );
+          const processorDuration = performance.now() - processorStartTime;
+          let divDuration = 0;
+          let svgDuration = 0;
+          let divHeapDelta = null;
+          let svgHeapDelta = null;
+
+          if (renderDiv) {
+            const heapBefore = readJavaScriptHeap();
+            const domStart = performance.now();
+            divRenderer.render(renderPackets);
+            divDuration = performance.now() - domStart;
+            const heapAfter = readJavaScriptHeap();
+            divHeapDelta = heapBefore === null || heapAfter === null ? null : heapAfter - heapBefore;
+          } else {
+            const heapBefore = readJavaScriptHeap();
+            const domStart = performance.now();
+            svgRenderer.render(renderPackets);
+            svgDuration = performance.now() - domStart;
+            const heapAfter = readJavaScriptHeap();
+            svgHeapDelta = heapBefore === null || heapAfter === null ? null : heapAfter - heapBefore;
+          }
+
+          autoOrbitLastPresentedSequence = sequence;
+          hideWebGpuError();
+          lastRenderMetrics = {
+            visible: result.points.length,
+            sampled: splat.count,
+            source: splat.sourceCount,
+            computeBackend: "gpu",
+            computeWarning: null,
+            processorDuration,
+            divHeapDelta,
+            svgHeapDelta,
+            phases: {
+              sh: shDuration,
+              centering: 0,
+              projection: projectionDuration,
+              gpuSetup: initializationDuration + result.timings.upload,
+              gpuSubmit: result.timings.submit,
+              gpuReadback: result.timings.readback,
+              gpuDecode: result.timings.decode,
+              processor: processorDuration,
+              divDom: divDuration,
+              svgDom: svgDuration
+            }
+          };
+          recordAutoOrbitPresentation(performance.now());
+        } catch (error) {
+          if (!autoOrbitActive || session !== autoOrbitSession || generation !== renderGeneration) return;
+          disableWebGpu(error);
+          stopAutoOrbit();
+          renderPointCloud({ showLoader: false });
+        }
+      }
+
+      async function autoOrbitTick(timestamp) {
+        if (!autoOrbitActive) return;
+        const fullFrameDuration = autoOrbitLastTimestamp === null
+          ? null
+          : timestamp - autoOrbitLastTimestamp;
+        const elapsedSeconds = fullFrameDuration === null
+          ? 0
+          : Math.min(0.5, fullFrameDuration / 1000);
+        autoOrbitLastTimestamp = timestamp;
+        if (fullFrameDuration !== null && computeBackendSelect.value !== "gpu") {
+          autoOrbitSmoothedFrameMs = autoOrbitSmoothedFrameMs === null
+            ? fullFrameDuration
+            : autoOrbitSmoothedFrameMs * 0.75 + fullFrameDuration * 0.25;
+          if (lastRenderMetrics?.phases) {
+            if (autoOrbitSmoothedPhases === null) {
+              autoOrbitSmoothedPhases = { ...lastRenderMetrics.phases };
+            } else {
+              for (const phase of Object.keys(autoOrbitSmoothedPhases)) {
+                autoOrbitSmoothedPhases[phase] = phase === "gpuSetup"
+                  ? lastRenderMetrics.phases[phase]
+                  : autoOrbitSmoothedPhases[phase] * 0.75 +
+                    lastRenderMetrics.phases[phase] * 0.25;
+              }
+            }
+          }
+        }
+        rotateCameraRig(autoOrbitAxis(), elapsedSeconds * 20 * Math.PI / 180);
+        updateAxisGizmo();
+
+        if (computeBackendSelect.value === "gpu") {
+          submitPipelinedGpuFrame();
+          if (autoOrbitActive) autoOrbitFrameId = requestAnimationFrame(autoOrbitTick);
+          return;
+        }
+
+        const succeeded = await renderPointCloud({ showLoader: false });
+        if (!autoOrbitActive) return;
+        if (!succeeded) {
+          stopAutoOrbit();
+          return;
+        }
+
+        if (
+          autoOrbitLastStatsUpdate === null ||
+          timestamp - autoOrbitLastStatsUpdate >= 250
+        ) {
+          autoOrbitLastStatsUpdate = timestamp;
+          updateAutoOrbitButton();
+        }
+        autoOrbitFrameId = requestAnimationFrame(autoOrbitTick);
+      }
+
+      function startAutoOrbit() {
+        if (autoOrbitActive) return;
+        autoOrbitActive = true;
+        autoOrbitSession += 1;
+        autoOrbitLastTimestamp = null;
+        autoOrbitSmoothedFrameMs = null;
+        autoOrbitSmoothedPhases = null;
+        autoOrbitLastStatsUpdate = null;
+        autoOrbitLastPresentedAt = null;
+        autoOrbitFrameSequence = 0;
+        autoOrbitLastPresentedSequence = 0;
+        autoOrbitDroppedFrames = 0;
+        updateAutoOrbitButton();
+        autoOrbitFrameId = requestAnimationFrame(autoOrbitTick);
+      }
+
+      function setRendererLoading(active, divMessage = "Preparing DIV renderer…", svgMessage = "Preparing SVG renderer…") {
+        const divEnabled = rendererSelect.value === "div";
+        const activeShell = divEnabled ? divShell : svgShell;
+        const activeLoader = divEnabled ? divLoader : svgLoader;
+        const activeMessage = divEnabled ? divMessage : svgMessage;
+        activeShell.classList.toggle("is-loading", active);
+        activeLoader.setAttribute("aria-hidden", String(!active));
+        activeLoader.querySelector(".render-loader-text").textContent = activeMessage;
+      }
+
+      function waitForPaint() {
+        return new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        });
+      }
+
+      function readJavaScriptHeap() {
+        const bytes = performance.memory?.usedJSHeapSize;
+        return Number.isFinite(bytes) ? bytes : null;
+      }
+
+      function formatByteDelta(bytes) {
+        if (!Number.isFinite(bytes)) return "unavailable";
+        const absoluteBytes = Math.abs(bytes);
+        const units = ["B", "KB", "MB", "GB"];
+        const unitIndex = Math.min(
+          Math.floor(Math.log(Math.max(absoluteBytes, 1)) / Math.log(1024)),
+          units.length - 1
+        );
+        const value = absoluteBytes / (1024 ** unitIndex);
+        const sign = bytes > 0 ? "+" : bytes < 0 ? "−" : "";
+        const note = bytes < 0 ? " (GC/noisy)" : "";
+        return `${sign}${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}${note}`;
+      }
+
+      async function renderPointCloud({ showLoader = true } = {}) {
+        const generation = ++renderGeneration;
+        const model = models[modelSelect.value];
+        const requestedCount = Number(countInput.value);
+        const modelWasCached = parsedModelCache.has(model.url);
+        const cachedSample = sampledGaussianCache.get(model.url);
+        const sampleWasCached = cachedSample?.count === requestedCount;
+        const renderDiv = rendererSelect.value === "div";
+        const renderSvg = !renderDiv;
+        const modelCenter = model.center;
+
+        credit.replaceChildren("Model from ");
+        const creditLink = document.createElement("a");
+        creditLink.href = model.creditUrl;
+        creditLink.target = "_blank";
+        creditLink.rel = "noreferrer";
+        creditLink.textContent = model.creditLabel;
+        credit.appendChild(creditLink);
+        if (showLoader) {
+          status.textContent = !modelWasCached
+            ? `Downloading and decoding ${model.name} once…`
+            : sampleWasCached
+              ? `Reusing cached ${requestedCount.toLocaleString()}-Gaussian set…`
+              : `Creating ${requestedCount.toLocaleString()}-Gaussian sample…`;
+          const loadingMessage = !modelWasCached
+            ? "Downloading and decoding PLY once…"
+            : sampleWasCached
+              ? "Reusing cached Gaussian set…"
+              : "Creating Gaussian sample…";
+          setRendererLoading(true, loadingMessage, loadingMessage);
+        }
+
+        try {
+          const parsedModel = await loadParsedModel(model.url);
+          if (generation !== renderGeneration) return false;
+          const orientation = activateModelOrientation(model, parsedModel);
+          updateAxisGizmo();
+          const offset = cameraOffset();
+          const cameraPosition = {
+            x: modelCenter.x + offset.x,
+            y: modelCenter.y + offset.y,
+            z: modelCenter.z + offset.z
+          };
+          description.textContent = `${model.name} 3DGS · up ${orientation.up.toUpperCase()} (${orientation.upSource}) · front ${orientation.front.toUpperCase()} (${orientation.frontSource}) · right-handed input coordinates.`;
+          description.title = description.textContent;
+          if (showLoader) {
+            status.textContent = `Rendering ${requestedCount.toLocaleString()} splats with the ${renderDiv ? "DIV" : "SVG"} renderer…`;
+            const computeLabel = computeBackendSelect.value === "gpu" ? "WebGPU" : "CPU";
+            setRendererLoading(true, `Evaluating SH and projecting with ${computeLabel}…`, `Evaluating SH and projecting with ${computeLabel}…`);
+            await waitForPaint();
+          }
+          if (generation !== renderGeneration) return false;
+          const cachedGaussianSample = getCachedGaussianSample(
+            model.url,
+            parsedModel,
+            requestedCount,
+            modelCenter
+          );
+          const shStartTime = performance.now();
+          const splat = PlyReader.updateSampleColors(cachedGaussianSample, { cameraPosition });
+          const shDuration = performance.now() - shStartTime;
+          const centeringDuration = sampleWasCached ? 0 : cachedGaussianSample.centeringDuration;
+          let computeBackend = computeBackendSelect.value;
+          let computeWarning = null;
+          let gpuSetupDuration = 0;
+          let gpuSubmitDuration = 0;
+          let gpuReadbackDuration = 0;
+          let gpuDecodeDuration = 0;
+          let projectedPoints;
+          const projectionStartTime = performance.now();
+          if (computeBackend === "gpu") {
+            try {
+              const gpuProcessor = await getWebGpuProcessor();
+              const initializationDuration = webGpuInitializationReported
+                ? 0
+                : gpuProcessor.initializationDuration;
+              webGpuInitializationReported = true;
+              projectedPoints = await gpuProcessor.project(splat.points, {
+                cameraPosition: offset,
+                target: { x: 0, y: 0, z: 0 },
+                worldUp: cameraWorldUp(),
+                fieldOfView: 50,
+                output: cachedGaussianSample.gpuProjectedPoints
+              });
+              hideWebGpuError();
+              if (generation !== renderGeneration) return false;
+              gpuSetupDuration = initializationDuration + gpuProcessor.lastTimings.upload;
+              gpuSubmitDuration = gpuProcessor.lastTimings.submit;
+              gpuReadbackDuration = gpuProcessor.lastTimings.readback;
+              gpuDecodeDuration = gpuProcessor.lastTimings.decode;
+            } catch (error) {
+              computeWarning = disableWebGpu(error);
+              computeBackend = "cpu";
+            }
+          }
+          if (computeBackend === "cpu") {
+            projectedPoints = SplatReader.projectFromCamera(splat.points, {
+              cameraPosition: offset,
+              target: { x: 0, y: 0, z: 0 },
+              worldUp: cameraWorldUp(),
+              fieldOfView: 50,
+              output: cachedGaussianSample.projectedPoints
+            });
+          }
+          const projectionDuration = performance.now() - projectionStartTime;
+          const processorStartTime = performance.now();
+          const renderPackets = SplatProcessor.prepare(
+            projectedPoints,
+            cachedGaussianSample.renderPackets
+          );
+          const processorDuration = performance.now() - processorStartTime;
+          let divDuration = 0;
+          let svgDuration = 0;
+          let divHeapDelta = null;
+          let svgHeapDelta = null;
+
+          if (generation !== renderGeneration) return false;
+
+          if (showLoader && renderDiv) {
+            setRendererLoading(true, `Building ${renderPackets.length.toLocaleString()} DIV splats…`, "Waiting for DIV renderer…");
+            await waitForPaint();
+          }
+          if (generation !== renderGeneration) return false;
+          if (renderDiv) {
+            const divHeapBefore = readJavaScriptHeap();
+            const divStartTime = performance.now();
+            divRenderer.render(renderPackets);
+            divDuration = performance.now() - divStartTime;
+            const divHeapAfter = readJavaScriptHeap();
+            divHeapDelta = divHeapBefore === null || divHeapAfter === null
+              ? null
+              : divHeapAfter - divHeapBefore;
+          }
+
+          if (showLoader && renderSvg) {
+            setRendererLoading(true, "DIV renderer ready", `Building ${renderPackets.length.toLocaleString()} SVG splats…`);
+            await waitForPaint();
+          }
+          if (generation !== renderGeneration) return false;
+          if (renderSvg) {
+            const svgHeapBefore = readJavaScriptHeap();
+            const svgStartTime = performance.now();
+            svgRenderer.render(renderPackets);
+            svgDuration = performance.now() - svgStartTime;
+            const svgHeapAfter = readJavaScriptHeap();
+            svgHeapDelta = svgHeapBefore === null || svgHeapAfter === null
+              ? null
+              : svgHeapAfter - svgHeapBefore;
+          }
+          if (showLoader) setRendererLoading(false);
+
+          lastRenderMetrics = {
+            visible: projectedPoints.length,
+            sampled: splat.count,
+            source: splat.sourceCount,
+            computeBackend,
+            computeWarning,
+            processorDuration,
+            divHeapDelta,
+            svgHeapDelta,
+            phases: {
+              sh: shDuration,
+              centering: centeringDuration,
+              projection: projectionDuration,
+              gpuSetup: gpuSetupDuration,
+              gpuSubmit: gpuSubmitDuration,
+              gpuReadback: gpuReadbackDuration,
+              gpuDecode: gpuDecodeDuration,
+              processor: processorDuration,
+              divDom: divDuration,
+              svgDom: svgDuration
+            }
+          };
+          updateCompletedStatus();
+          if (!autoOrbitActive) updateFrameBreakdowns();
+          return true;
+        } catch (error) {
+          if (generation !== renderGeneration) return false;
+          console.error(error);
+          if (showLoader) setRendererLoading(false);
+          status.textContent = `Unable to load point cloud: ${error.message}`;
+          return false;
+        }
+      }
+
+      countInput.addEventListener("input", updateCountLabel);
+      for (const [panel, name] of [[divFrameBreakdown, "DIV"], [svgFrameBreakdown, "SVG"]]) {
+        const toggle = panel.querySelector(".breakdown-toggle");
+        toggle.addEventListener("click", () => {
+          const collapsed = panel.classList.toggle("is-collapsed");
+          toggle.setAttribute("aria-expanded", String(!collapsed));
+          toggle.title = collapsed ? "Show statistics" : "Hide statistics";
+          toggle.setAttribute("aria-label", `${collapsed ? "Show" : "Hide"} ${name} statistics`);
+        });
+      }
+      rendererSelect.addEventListener("change", () => {
+        stopAutoOrbit();
+        renderGeneration += 1;
+        saveRendererPreferences();
+        syncRendererSections();
+        applyCameraRoll();
+        renderPointCloud();
+      });
+      computeBackendSelect.addEventListener("change", () => {
+        stopAutoOrbit();
+        hideWebGpuError();
+        renderGeneration += 1;
+        saveRendererPreferences();
+        renderPointCloud();
+      });
+      dismissWebGpuError.addEventListener("click", hideWebGpuError);
+      countInput.addEventListener("change", () => {
+        stopAutoOrbit();
+        renderPointCloud();
+      });
+      for (const selector of [modelUpAxisSelect, modelFrontAxisSelect]) {
+        selector.addEventListener("change", () => {
+          stopAutoOrbit();
+          saveOrientationOverride();
+          resetCamera();
+          applyCameraRoll();
+          renderPointCloud();
+        });
+      }
+      modelSelect.addEventListener("change", () => {
+        stopAutoOrbit();
+        updateModelControls();
+        renderPointCloud();
+      });
+      document.querySelector(".camera-controls").addEventListener("click", (event) => {
+        const action = event.target.closest("button")?.dataset.cameraAction;
+        if (!action) return;
+
+        if (action === "autoOrbit") {
+          if (autoOrbitActive) stopAutoOrbit();
+          else startAutoOrbit();
+          return;
+        }
+
+        if (autoOrbitActive) stopAutoOrbit();
+
+        const orbitStep = 90 * Math.PI / 180;
+        const rollStep = 90 * Math.PI / 180;
+        const baseDistance = models[modelSelect.value].cameraDistance;
+        const modelUp = axisVector(modelUpAxisSelect.value);
+        if (action === "left") rotateCameraRig(modelUp, -orbitStep);
+        if (action === "right") rotateCameraRig(modelUp, orbitStep);
+        if (action === "up" || action === "down") {
+          const forward = {
+            x: -cameraState.direction.x,
+            y: -cameraState.direction.y,
+            z: -cameraState.direction.z
+          };
+          const cameraRight = SplatReader.normalizeVector(SplatReader.cross(forward, cameraState.up));
+          rotateCameraRig(cameraRight, action === "up" ? -orbitStep : orbitStep);
+        }
+        if (action === "rollLeft") cameraState.roll -= rollStep;
+        if (action === "rollRight") cameraState.roll += rollStep;
+        if (action === "closer") cameraState.distance = Math.max(baseDistance * 0.35, cameraState.distance * 0.85);
+        if (action === "farther") cameraState.distance = Math.min(baseDistance * 4, cameraState.distance / 0.85);
+        if (action === "reset") resetCamera();
+        cameraState.roll = normalizeAngle(cameraState.roll);
+        applyCameraRoll();
+        if (action === "rollLeft" || action === "rollRight") {
+          updateAxisGizmo();
+          if (!divShell.classList.contains("is-loading")) updateCompletedStatus();
+          return;
+        }
+        renderPointCloud();
+      });
+
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && autoOrbitActive) {
+          autoOrbitLastTimestamp = null;
+        }
+      });
+
+      loadRendererPreferences();
+      updateModelControls();
+      constrainFrontAxis();
+      syncRendererSections();
+      applyCameraRoll();
+      renderPointCloud();
+    </script>
+  </body>
+</html>
